@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
+  password  String
+  fullName  String
+  role      String
+  avatar    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? 
+
+  kks       KK[]
+  niks      NIK[]
+}
+
+model KK {
+  id                  Int       @id @default(autoincrement())
+  user_id              Int 
+  nomor_kk            String    @unique
+  nama_kk             String
+  alamat              String
+  nama_cp             String
+  kontak_cp           String
+  rumah               Int
+  luas                Int
+  lantai              Int
+  dinding             Int
+  atap                Int
+  kondisi             Int
+  air                 Int
+  penerangan          Int
+  energi              Int
+  mck                 Int
+  jamban              Int
+  limbah              Int
+  anggaran_makan      Int
+  anggaran_pakaian    Int
+  anggaran_daging     Int
+  terdaftar_kis       Int
+  jaminan_kesehatan   Int
+  disabilitas         Int
+  penyakit            Int
+  ijazah_tertinggi    Int
+  tanggungan          Int
+  pekerjaan_utama     Int
+  jumlah_berpenghasilan Int
+  jumlah_pendapatan   Int
+  aset_elektronik     Int
+  aset_kendaraan      Int
+  jenis_kendaraan     Int
+  jumlah_kendaraan    Int
+  aset_lain           Int
+  hewan_ternak        Int
+  foto                String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime? 
+
+  nik                 NIK[]
+  user      User      @relation(fields: [user_id], references: [id])
+}
+model NIK {
+  id                  Int       @id @default(autoincrement())
+  user_id              Int 
+  nik                 String    @unique
+  nomor_kk            String   
+  nama                String
+  tempat_lahir        String
+  tanggal_lahir       String
+  jenis_kelamin       String
+  alamat              String
+  rt                  String
+  rw                  String
+  agama               String
+  status_perkawinan   String
+  pendidikan_terakhir String
+  hubungan            String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime? 
+
+  kk                  KK       @relation(fields: [nomor_kk], references: [nomor_kk])
+  user      User      @relation(fields: [user_id], references: [id])
+}

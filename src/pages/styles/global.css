@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* to center align content from both sides */
+.all-center {
+	@apply flex items-center justify-center;
+}
+
+.primary-gradient {
+	@apply bg-gradient-to-br from-violet-500 to-violet-400;
+}
+
+.loginbg {
+  position: relative;
+}
+
+.loginbg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('../../components/assets/geblek.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.2;
+  filter: blur(0.5px);
+  z-index: -1;
+}
+
+/* Your existing styles for the content */
+.min-h-screen {
+  /* Your existing styles for the content container */
+}
+
+
+/* width */
+::-webkit-scrollbar {
+	width: 10px;
+  }
+  
+  /* Track */
+  ::-webkit-scrollbar-track {
+	@apply bg-gray-100;
+  }
+   
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+	@apply bg-gray-300 hover:bg-gray-400;
+  }
+
+
+  ::-webkit-scrollbar {
+    @apply h-1 w-1;
+  }
+  
+  /* Track */
+  ::-webkit-scrollbar-track {
+    /* background: #f1f1f1;  */
+    @apply bg-gray-200 rounded-md;
+  }
+   
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-md hover:bg-gray-400;
+  }
+
+
+/* 
+  *{
+    @apply bg-red-500/20 border border-red-500;
+  } */
