@@ -53,7 +53,9 @@ function TambahKK() {
     jumlah_kendaraan: string;
     aset_lain: string;
     hewan_ternak: string;
-    foto: File | null;  
+    foto_1: File | null;  
+    foto_2: File | null;  
+    foto_3: File | null;  
   }>({
     nomor_kk: '',
     nama_kk: '',
@@ -90,7 +92,9 @@ function TambahKK() {
     jumlah_kendaraan: '',
     aset_lain: '',
     hewan_ternak: '',
-    foto: null,  
+    foto_1: null,  
+    foto_2: null,  
+    foto_3: null,  
   });
   
 

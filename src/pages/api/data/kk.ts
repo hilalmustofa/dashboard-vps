@@ -2,51 +2,25 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withFileUpload, getConfig, FormNextApiRequest } from 'next-multiparty';
 import { promises as fsPromises } from 'fs';
 import { join } from 'path';
-import { getSession } from 'next-auth/react';
-import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken'
-
-const prisma = new PrismaClient();
+import prisma from '../prisma';
+import { authenticateToken } from '../auth';
 
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
-  const token = authHeader.substring('Bearer '.length);
-  try {
-    const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET ?? '5d24a52636368d64fa877143e58e4b68770b44a1697a1d0d783eff936f5116a4');
-    const userId = (decodedToken as { id: number }).id;
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-  } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
+  const user_id = await authenticateToken(req, res);
+  if (!user_id) {
+    return;
   }
 
   if (req.method === 'POST') {
     const contentType = req.headers['content-type'];
     if (contentType && contentType.includes('multipart/form-data')) {
       return withFileUpload(createKKHandler)(req as FormNextApiRequest, res);
-    } else {
-      // Handle the case where it's a regular POST without a file
-      // ...
     }
   } else if (req.method === 'PUT' && req.query.id) {
     const contentType = req.headers['content-type'];
     if (contentType && contentType.includes('multipart/form-data')) {
       return withFileUpload(updateKKHandler)(req as FormNextApiRequest, res);
-    } else {
-      // Handle the case where it's a regular PUT without a file
-      // ...
     }
   } else if (req.method === 'GET' && req.query.id) {
     await getSingleKK(req, res);
@@ -60,44 +34,50 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 }
 
 async function createKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
+  const user_id = await authenticateToken(req, res);
+  if (!user_id) {
+    return;
   }
+  const expectedFileKeys = ['foto_1', 'foto_2', 'foto_3'];
+  const uploadedFiles = req.files || [];
+  const uploadedFileKeys = uploadedFiles.map(file => file.name);
 
-  const token = authHeader.substring('Bearer '.length);
-  const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET ?? '5d24a52636368d64fa877143e58e4b68770b44a1697a1d0d783eff936f5116a4');
-  const user_id = (decodedToken as { id: number }).id;
-
-  const expectedFileKey = 'foto';
-  const uploadedFileKey = req.file?.name;
-
-  if (uploadedFileKey !== expectedFileKey) {
-    return res.status(400).json({
-      code: 400,
-      message: 'Invalid file key',
-    });
+  for (const expectedFileKey of expectedFileKeys) {
+    if (!uploadedFileKeys.includes(expectedFileKey)) {
+      return res.status(400).json({
+        code: 400,
+        message: `Invalid file key: ${expectedFileKey}`,
+      });
+    }
   }
 
   const allowedMimeTypes = ['image/jpeg', 'image/png'];
-  const fileMimeType = req.file?.mimetype;
-
-  if (!fileMimeType || !allowedMimeTypes.includes(fileMimeType)) {
-    return res.status(422).json({
-      code: 422,
-      message: 'Hanya boleh JPG atau PNG',
-    });
+  for (const file of uploadedFiles) {
+    if (file.mimetype && !allowedMimeTypes.includes(file.mimetype)) {
+      return res.status(422).json({
+        code: 422,
+        message: 'Hanya boleh JPG atau PNG',
+      });
+    }
   }
 
-  const filePath = req.file?.filepath || '';
-  const publicFolderPath = join(process.cwd(), 'uploads');
-  const destinationPath = join(publicFolderPath, 'kk', req.file?.originalFilename || 'error');
-  const fileName = req.file?.originalFilename || 'error';
+  const publicFolderPath = join(process.cwd(), 'uploads', 'kk');
+  const uploadedFileNames = [];
 
   try {
-    await fsPromises.copyFile(filePath, destinationPath);
+    for (const file of uploadedFiles) {
+      const getJakartaISODateString = () => {
+        const isoString = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T');
+        return isoString.replace(/[-:]/g, '_');
+      };
 
+      const uniqueFileName = `${getJakartaISODateString()}_${file.originalFilename}`;
+      const destinationPath = join(publicFolderPath, uniqueFileName);
+
+      await fsPromises.copyFile(file.filepath, destinationPath);
+      uploadedFileNames.push(uniqueFileName);
+      await fsPromises.unlink(file.filepath);
+    }
     const {
       nomor_kk,
       nama_kk,
@@ -232,7 +212,9 @@ async function createKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
         jumlah_kendaraan: Number(jumlah_kendaraan),
         aset_lain: Number(aset_lain),
         hewan_ternak: Number(hewan_ternak),
-        foto: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + fileName as string,
+        foto_1: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + uploadedFileNames[0],
+        foto_2: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + uploadedFileNames[1],
+        foto_3: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + uploadedFileNames[2],
       },
     });
 
@@ -252,13 +234,13 @@ async function createKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
 async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = parseInt(req.query.pageSize as string) || 10;
+    const per_page = parseInt(req.query.per_page as string) || 10;
     const searchQuery = req.query.search as string || '';
 
     const allowedFilters = [
       'id',
       'page',
-      'pageSize',
+      'per_page',
       'search',
       'rumah',
       'luas',
@@ -298,7 +280,7 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const filters = Object.entries(req.query)
-      .filter(([key]) => key !== 'page' && key !== 'pageSize' && key !== 'search')
+      .filter(([key]) => key !== 'page' && key !== 'per_page' && key !== 'search')
       .filter(([key]) => allowedFilters.includes(key))
       .reduce((acc, [key, value]) => {
         const parsedValue = parseInt(value as string, 10);
@@ -322,8 +304,8 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
       }
     });
 
-    const totalPages = Math.ceil(totalCount / pageSize);
-    const offset = (page - 1) * pageSize;
+    const totalPages = Math.ceil(totalCount / per_page);
+    const offset = (page - 1) * per_page;
     const kkList = await prisma.kK.findMany({
       where: {
         deletedAt: null,
@@ -333,7 +315,7 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
         ...filters,
       },
       skip: offset,
-      take: pageSize,
+      take: per_page,
       select: {
         id: true,
         user_id: true,
@@ -372,7 +354,9 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
         jumlah_kendaraan: true,
         aset_lain: true,
         hewan_ternak: true,
-        foto: true,
+        foto_1: true,
+        foto_2: true,
+        foto_3: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -463,7 +447,9 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
           jumlah_kendaraan: kk.jumlah_kendaraan,
           aset_lain: kk.aset_lain,
           hewan_ternak: kk.hewan_ternak,
-          foto: kk.foto,
+          foto_1: kk.foto_1,
+          foto_2: kk.foto_2,
+          foto_3: kk.foto_3,
           createdAt: kk.createdAt,
           updatedAt: kk.updatedAt,
         };
@@ -476,7 +462,7 @@ async function getKKHandler(req: NextApiRequest, res: NextApiResponse) {
       code: 200,
       data: kkListWithAnggota,
       total: totalCount,
-      per_page: pageSize,
+      per_page: per_page,
       pages: totalPages,
     });
   } catch (error) {
@@ -532,7 +518,9 @@ async function getSingleKK(req: NextApiRequest, res: NextApiResponse) {
         jumlah_kendaraan: true,
         aset_lain: true,
         hewan_ternak: true,
-        foto: true,
+        foto_1: true,
+        foto_2: true,
+        foto_3: true,
         nik: {
           select: {
             id: true,
@@ -542,6 +530,7 @@ async function getSingleKK(req: NextApiRequest, res: NextApiResponse) {
             tempat_lahir: true,
             tanggal_lahir: true,
             jenis_kelamin: true,
+            pekerjaan: true,
             alamat: true,
             rt: true,
             rw: true,
@@ -565,10 +554,10 @@ async function getSingleKK(req: NextApiRequest, res: NextApiResponse) {
     });
 
     if (!kkData) {
-      return res.status(404).json({ message: 'KK not found' });
+      return res.status(404).json({ message: 'KK tidak ditemukan' });
     }
 
-    res.json({ data: kkData });
+    res.json({ code: 200, data: kkData, message: 'Sukses menampilkan data KK' });
   } catch (error) {
     console.error('Error retrieving KK data:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -577,80 +566,113 @@ async function getSingleKK(req: NextApiRequest, res: NextApiResponse) {
 
 
 async function updateKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
+  const user_id = await authenticateToken(req, res);
+  if (!user_id) {
+    return;
   }
 
-  const token = authHeader.substring('Bearer '.length);
-  const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET ?? '5d24a52636368d64fa877143e58e4b68770b44a1697a1d0d783eff936f5116a4');
-  const user_id = (decodedToken as { id: number }).id;
+  const expectedFileKeys = ['foto_1', 'foto_2', 'foto_3'];
+  const uploadedFiles = req.files || [];
+  const uploadedFileKeys = uploadedFiles.map(file => file.name);
 
-
-  const expectedFileKey = 'foto';
-  const uploadedFileKey = req.file?.name;
-
-  if (uploadedFileKey !== expectedFileKey) {
-    return res.status(400).json({
-      code: 400,
-      message: 'Invalid file key',
-    });
+  for (const expectedFileKey of expectedFileKeys) {
+    if (uploadedFileKeys.includes(expectedFileKey)) {
+      const file = uploadedFiles.find(file => file.name === expectedFileKey);
+      if (!file) {
+        return res.status(500).json({ error: `Uploaded file for key ${expectedFileKey} tidak ditemukan` });
+      }
+      const fileMimeType = file.mimetype;
+      const allowedMimeTypes = ['image/jpeg', 'image/png'];
+      if (!fileMimeType || !allowedMimeTypes.includes(fileMimeType)) {
+        return res.status(422).json({
+          code: 422,
+          message: 'Hanya boleh JPG atau PNG',
+        });
+      }
+    }
   }
 
-  const allowedMimeTypes = ['image/jpeg', 'image/png'];
-  const fileMimeType = req.file?.mimetype;
-
-  if (!fileMimeType || !allowedMimeTypes.includes(fileMimeType)) {
-    return res.status(422).json({
-      code: 422,
-      message: 'Hanya boleh JPG atau PNG',
-    });
-  }
-
-  const filePath = req.file?.filepath || '';
   const publicFolderPath = join(process.cwd(), 'uploads');
-  const destinationPath = join(publicFolderPath, 'kk', req.file?.originalFilename || 'error');
-  const fileName = req.file?.originalFilename || 'error';
+  const uploadedFileNames = [];
+
   try {
-    await fsPromises.copyFile(filePath, destinationPath);
+    for (const file of uploadedFiles) {
+      const getJakartaISODateString = () => {
+        const isoString = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T');
+        return isoString.replace(/[-:]/g, '_');
+      };
+
+      const uniqueFileName = `${getJakartaISODateString()}_${file.originalFilename}`;
+      const destinationPath = join(publicFolderPath, 'kk', uniqueFileName);
+
+      await fsPromises.copyFile(file.filepath, destinationPath);
+      uploadedFileNames.push(uniqueFileName);
+      await fsPromises.unlink(file.filepath);
+    }
+
     const nomor_kk = req.query.id as string;
-    const {
-      nama_kk,
-      alamat,
-      nama_cp,
-      kontak_cp,
-      rumah,
-      luas,
-      lantai,
-      dinding,
-      atap,
-      kondisi,
-      air,
-      penerangan,
-      energi,
-      mck,
-      jamban,
-      limbah,
-      anggaran_makan,
-      anggaran_pakaian,
-      anggaran_daging,
-      terdaftar_kis,
-      jaminan_kesehatan,
-      disabilitas,
-      penyakit,
-      ijazah_tertinggi,
-      tanggungan,
-      pekerjaan_utama,
-      jumlah_berpenghasilan,
-      jumlah_pendapatan,
-      aset_elektronik,
-      aset_kendaraan,
-      jenis_kendaraan,
-      jumlah_kendaraan,
-      aset_lain,
-      hewan_ternak,
-    } = req.fields as Record<string, string | number>;
+
+    const updateData: Record<string, any> = {
+      user_id: Number(user_id)
+    };
+
+    const optionalFields = ['nomor_kk', 'nama_kk', 'alamat', 'nama_cp', 'kontak_cp'];
+    for (const field of optionalFields) {
+      if (req.fields[field] !== undefined) {
+        updateData[field] = req.fields[field];
+      }
+    }
+
+    const numericFields = [
+      'rumah',
+      'luas',
+      'lantai',
+      'dinding',
+      'atap',
+      'kondisi',
+      'air',
+      'penerangan',
+      'energi',
+      'mck',
+      'jamban',
+      'limbah',
+      'anggaran_makan',
+      'anggaran_pakaian',
+      'anggaran_daging',
+      'terdaftar_kis',
+      'jaminan_kesehatan',
+      'disabilitas',
+      'penyakit',
+      'ijazah_tertinggi',
+      'tanggungan',
+      'pekerjaan_utama',
+      'jumlah_berpenghasilan',
+      'jumlah_pendapatan',
+      'aset_elektronik',
+      'aset_kendaraan',
+      'jenis_kendaraan',
+      'jumlah_kendaraan',
+      'aset_lain',
+      'hewan_ternak',
+    ];
+
+    for (const field of numericFields) {
+      if (req.fields[field] !== undefined) {
+        updateData[field] = Number(req.fields[field]);
+      }
+    }
+
+
+    for (const file of uploadedFiles) {
+      const getJakartaISODateString = () => {
+        const isoString = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T');
+        return isoString.replace(/[-:]/g, '_');
+      };
+      const fotoIndex = file.name.split('_')[1];
+      const uniqueFileName = `${getJakartaISODateString()}_${file.originalFilename}`;
+      updateData[`foto_${fotoIndex}`] = process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + uniqueFileName;
+    }
+
 
     const existingKK = await prisma.kK.findUnique({
       where: {
@@ -660,7 +682,7 @@ async function updateKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
     });
 
     if (!existingKK) {
-      return res.status(404).json({ message: 'KK not found' });
+      return res.status(404).json({ message: 'KK tidak ditemukan' });
     }
 
     if (!/^\d{16}$/.test(nomor_kk as string)) {
@@ -672,45 +694,7 @@ async function updateKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
         nomor_kk,
         deletedAt: null,
       },
-      data: {
-        user_id: Number(user_id),
-        nomor_kk: nomor_kk as string,
-        nama_kk: nama_kk as string,
-        alamat: alamat as string,
-        nama_cp: nama_cp as string,
-        kontak_cp: kontak_cp as string,
-        rumah: Number(rumah),
-        luas: Number(luas),
-        lantai: Number(lantai),
-        dinding: Number(dinding),
-        atap: Number(atap),
-        kondisi: Number(kondisi),
-        air: Number(air),
-        penerangan: Number(penerangan),
-        energi: Number(energi),
-        mck: Number(mck),
-        jamban: Number(jamban),
-        limbah: Number(limbah),
-        anggaran_makan: Number(anggaran_makan),
-        anggaran_pakaian: Number(anggaran_pakaian),
-        anggaran_daging: Number(anggaran_daging),
-        terdaftar_kis: Number(terdaftar_kis),
-        jaminan_kesehatan: Number(jaminan_kesehatan),
-        disabilitas: Number(disabilitas),
-        penyakit: Number(penyakit),
-        ijazah_tertinggi: Number(ijazah_tertinggi),
-        tanggungan: Number(tanggungan),
-        pekerjaan_utama: Number(pekerjaan_utama),
-        jumlah_berpenghasilan: Number(jumlah_berpenghasilan),
-        jumlah_pendapatan: Number(jumlah_pendapatan),
-        aset_elektronik: Number(aset_elektronik),
-        aset_kendaraan: Number(aset_kendaraan),
-        jenis_kendaraan: Number(jenis_kendaraan),
-        jumlah_kendaraan: Number(jumlah_kendaraan),
-        aset_lain: Number(aset_lain),
-        hewan_ternak: Number(hewan_ternak),
-        foto: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/kk/' + fileName as string,
-      },
+      data: updateData,
     });
 
     res.json({ message: 'KK updated successfully', data: updatedKK });
@@ -719,6 +703,7 @@ async function updateKKHandler(req: FormNextApiRequest, res: NextApiResponse) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
+
 
 async function deleteKKHandler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -742,7 +727,7 @@ async function deleteKKHandler(req: NextApiRequest, res: NextApiResponse) {
     });
 
     if (!existingKK) {
-      return res.status(404).json({ code: 422, message: 'KK not found' });
+      return res.status(404).json({ code: 422, message: 'KK tidak ditemukan' });
     }
 
     if (existingKK.nik.length > 0) {
@@ -767,3 +752,4 @@ async function deleteKKHandler(req: NextApiRequest, res: NextApiResponse) {
 }
 
 export default handler;
+export const config = getConfig();

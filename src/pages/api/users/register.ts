@@ -2,10 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withFileUpload, getConfig, FormNextApiRequest } from 'next-multiparty';
 import { join } from 'path';
 import { promises as fsPromises } from 'fs';
-import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import prisma from '../prisma';
 
-const prisma = new PrismaClient();
 
 interface User {
   id: number;
@@ -32,6 +32,7 @@ function hasSymbol(str: string): boolean {
   return /[!@#$%^&*(),.?":{}|<>]/.test(str);
 }
 
+
 export default async function handler(req: FormNextApiRequest, res: NextApiResponse) {
   const contentType = req.headers['content-type'];
   if (contentType && contentType.includes('multipart/form-data')) {
@@ -43,6 +44,18 @@ export default async function handler(req: FormNextApiRequest, res: NextApiRespo
 }
 
 async function createUserHandler(req: FormNextApiRequest, res: NextApiResponse) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ code: 401, message: 'Unauthorized' });
+  }
+
+  const token = authHeader.substring('Bearer '.length);
+  const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET || '5d24a52636368d64fa877143e58e4b68770b44a1697a1d0d783eff936f5116a4');
+  const user = await prisma.user.findUnique({ where: { id: (decodedToken as { id: number }).id } });
+
+  if (!user || user.role !== 'superuser') {
+    return res.status(403).json({ code: 403, message: 'Hanya superadmin yang bisa mendaftarkan user' });
+  }
 
   const expectedFileKey = 'avatar';
   const uploadedFileKey = req.file?.name;
@@ -63,26 +76,33 @@ async function createUserHandler(req: FormNextApiRequest, res: NextApiResponse) 
       message: 'Hanya boleh JPG atau PNG',
     });
   }
+  
+  const getJakartaISODateString = () => {
+    const isoString = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T');
+    return isoString.replace(/[-:]/g, '_');
+  };
+
+  const uniqueFileName = `${getJakartaISODateString()}_${req.file?.originalFilename || 'error'}`;
+  
   const filePath = req.file?.filepath || '';
   const publicFolderPath = join(process.cwd(), 'uploads');
-  const destinationPath = join(publicFolderPath, 'user', req.file?.originalFilename || 'error');
+  const destinationPath = join(publicFolderPath, 'user', uniqueFileName);
   await fsPromises.copyFile(filePath, destinationPath);
-  const fileName = req.file?.originalFilename || 'error';
 
   const { username, password, fullName, role } = req.fields as Record<string, string>;
 
   if (!username || !password || !fullName || !role) {
-    return res.status(422).json({ code: 422, message: "All fields are required" });
+    return res.status(422).json({ code: 422, message: "Semua kolom harus diisi" });
   }
 
   if (password.length < 6) {
-    return res.status(422).json({ code: 422, message: 'Password length should be more than 6 characters' });
+    return res.status(422).json({ code: 422, message: 'Password minimal 6 karakter' });
   }
 
   if (!hasUpperCase(password) || !hasLowerCase(password) || !hasNumeric(password) || !hasSymbol(password)) {
     return res.status(422).json({
       code: 422,
-      message: 'Password should contain at least 1 uppercase letter, 1 lowercase letter, 1 numeric digit, and 1 symbol',
+      message: 'Password harus berupa huruf kapital, huruf kecil, angka, dan simbol',
     });
   }
 
@@ -92,17 +112,17 @@ async function createUserHandler(req: FormNextApiRequest, res: NextApiResponse) 
     },
   });
   
-  if (superuserExists) {
-    return res.status(422).json({
-      code: 422,
-      message: 'A superuser already exists. Only one superuser is allowed.',
-    });
-  }
-
   if (role !== 'superuser' && role !== 'admin') {
     return res.status(422).json({
       code: 422,
-      message: 'Invalid role. Role must be either "superuser" or "admin"',
+      message: 'Hanya boleh `superuser` atau `admin`',
+    });
+  }
+  
+  if (role === 'superuser' && superuserExists) {
+    return res.status(422).json({
+      code: 422,
+      message: 'Role `superuser` sudah ada, gunakan `admin`',
     });
   }
 
@@ -112,7 +132,7 @@ async function createUserHandler(req: FormNextApiRequest, res: NextApiResponse) 
     });
 
     if (exist) {
-      return res.status(422).json({ code: 422, message: 'User already exists' });
+      return res.status(422).json({ code: 422, message: 'User sudah ada' });
     }
     const hashedPassword = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
     const user  = await prisma.user.create({
@@ -121,7 +141,7 @@ async function createUserHandler(req: FormNextApiRequest, res: NextApiResponse) 
         password: hashedPassword as string,
         fullName: fullName as string,
         role: role as string,
-        avatar: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/user/' + fileName as string,
+        avatar: process.env.NEXT_PUBLIC_BACKEND_URL + '/uploads/user/' + uniqueFileName as string,
       },
     });
 
@@ -141,5 +161,6 @@ const exclude = (user: User, keys: string[]): Partial<User> => {
 };
 
 export const config = getConfig();
+
 
 

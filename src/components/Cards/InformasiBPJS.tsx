@@ -51,7 +51,7 @@ function InformasiBPJS() {
     if(session){
         fetchData();
       }
-  }, [session]);
+  }, [informationList, session]);
 
   if (loading) {
     return <Loading loading={loading} color="#7B6CF0" />;

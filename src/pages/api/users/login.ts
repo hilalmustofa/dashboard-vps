@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import prisma from '../prisma';
 
 interface User {
   id: number;
@@ -11,8 +11,6 @@ interface User {
   avatar: string;
   password: string;
 }
-
-const prisma = new PrismaClient();
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -26,7 +24,7 @@ async function loginUserHandler(req: NextApiRequest, res: NextApiResponse) {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res.status(400).json({ message: 'Username and Password are required' });
+    return res.status(401).json({ code: 401, message: 'Username atau Password salah' });
   }
 
   try {
@@ -53,10 +51,7 @@ async function loginUserHandler(req: NextApiRequest, res: NextApiResponse) {
         access_token: accessToken,
       });
     } else {
-      return res.status(401).json({
-        code: 401,
-        message: 'Invalid username or password',
-      });
+      return res.status(401).json({ code: 401, message: 'Username atau Password salah' });
     }
   } catch (error) {
     return res.status(500).json({

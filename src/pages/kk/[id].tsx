@@ -1,7 +1,11 @@
+"use client"
 import React, { useState, useEffect } from 'react';
 import { getSession, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Hierarchy, InfoCircle, Profile, SearchNormal1 } from 'iconsax-react';
+import { PrimaryButton, OutlineButton } from '../../components/ui/Button'
 import { values } from '../../components/Questions';
+import ModalImage from 'react-modal-image';
 import { GetServerSideProps, GetServerSidePropsContext } from 'next';
 import PageNavbar, { PageNavbarIconButton, PageNavbarLeftContent, PageNavbarRightContent } from '../../components/layout/PageNavbar';
 import PageContent from '../../components/layout/PageContent';
@@ -61,9 +65,14 @@ export const getServerSideProps: GetServerSideProps = async (context: GetServerS
 
 const DetailKK = ({ data, serverSession }: { data: any; serverSession: any }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
+    const router = useRouter();
     const handleSidebarChange = (value: boolean) => {
         setIsSidebarOpen(value);
+    };
+
+
+    const handleEditClick = () => {
+        router.push(`/kk/edit/${data.nomor_kk}`);
     };
 
     const getLabel = (key: string, value: { toString: () => string; }) => {
@@ -102,14 +111,51 @@ const DetailKK = ({ data, serverSession }: { data: any; serverSession: any }) =>
 
             <PageContent>
                 <div className='border text-gray-500 w-full p-3 rounded-2xl'>
-                    <div className='space-y-1 mb-4'>
-                        <img src={data.foto} alt='Foto' width={200} className='rounded-2xl mb-2' />
-                        <p className='text-[14px] text-gray-400 font-medium'>Nama Keluarga</p>
-                        <div className='text-[13px] flex items-center gap-2'>
-                            <p className='text-gray-800 font-[440]'>{data.nama_kk}</p>
+                    <div className='flex justify-between items-start mb-4'>
+                        <div className='flex'>
+                            <div className='flex flex-col items-center mr-8'>
+                                <div style={{ width: 256, height: 144, overflow: 'hidden', borderRadius: '16px' }}>
+                                    <ModalImage
+                                        small={data.foto_1}
+                                        large={data.foto_1}
+                                        alt='Tampak Depan'
+                                        className='rounded-2xl cursor-pointer'
+                                        hideZoom={true}
+                                    />
+                                </div>
+                                <p className='text-[14px] text-gray-400 font-medium'>Tampak Depan</p>
+                            </div>
+                            <div className='flex flex-col items-center mr-8'>
+                                <div style={{ width: 256, height: 144, overflow: 'hidden', borderRadius: '16px' }}>
+                                    <ModalImage
+                                        small={data.foto_2}
+                                        large={data.foto_2}
+                                        alt='Tampak Samping'
+                                        className='rounded-2xl cursor-pointer'
+                                        hideZoom={true}
+                                    />
+                                </div>
+                                <p className='text-[14px] text-gray-400 font-medium'>Tampak Samping</p>
+                            </div>
+                            <div className='flex flex-col items-center'>
+                                <div style={{ width: 256, height: 144, overflow: 'hidden', borderRadius: '16px' }}>
+                                    <ModalImage
+                                        small={data.foto_3}
+                                        large={data.foto_3}
+                                        alt='Tampak Belakang'
+                                        className='rounded-2xl cursor-pointer'
+                                        hideZoom={true}
+                                    />
+                                </div>
+                                <p className='text-[14px] text-gray-400 font-medium'>Tampak Belakang</p>
+                            </div>
+                        </div>
+                        <div className='flex-shrink-0'>
+                            <PrimaryButton onClick={handleEditClick}>
+                                Edit Data
+                            </PrimaryButton>
                         </div>
                     </div>
-
                     <div className='space-y-1 mb-4'>
                         <p className='text-[13px] text-gray-400 font-medium'>Anggota Keluarga</p>
                         <ul className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
@@ -123,6 +169,10 @@ const DetailKK = ({ data, serverSession }: { data: any; serverSession: any }) =>
                                     <span className='text-[14px]'>Jenis Kelamin:</span>
                                     <p className='text-[13px] font-[440] text-gray-800'>
                                         {member.jenis_kelamin}
+                                    </p>
+                                    <span className='text-[14px]'>Pekerjaan:</span>
+                                    <p className='text-[13px] font-[440] text-gray-800'>
+                                        {member.pekerjaan}
                                     </p>
                                     <span className='text-[14px]'>Tempat Lahir:</span>
                                     <p className='text-[13px] font-[440] text-gray-800'>

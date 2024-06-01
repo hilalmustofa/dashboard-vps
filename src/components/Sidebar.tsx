@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { getSession, useSession, signOut } from "next-auth/react";
 import { GetServerSideProps, GetServerSidePropsContext } from 'next';
-import { ArrowRight2, Calendar, Document, Element3, Folder2, Headphone, User, Profile2User, Setting2, Setting4, Star, Timer1, Triangle } from 'iconsax-react'
+import { ArrowRight2, Calendar, Document, Element3, Folder2, Headphone, User, Profile2User, Setting2, Setting4, Star, Timer1, Triangle, UserAdd } from 'iconsax-react'
 import ProfileImage from '../components/assets/sync.svg';
 import Logo from '../components/assets/logos/logo.png'
 import Link from 'next/link'
@@ -60,6 +60,11 @@ function Sidebar({ serverSession }: SidebarProps) {
                         <Link href={'/warga'} className={`flex ${pathname === '/warga' ? 'text-primary' : ''} hover:px-8 duration-200 px-6 py-1 items-center gap-2`}>
                             <Profile2User size={16} />
                             Data Warga
+                        </Link>
+
+                        <Link href={'/users'} className={`flex ${pathname === '/users' ? 'text-primary' : ''} hover:px-8 duration-200 px-6 py-1 items-center gap-2`}>
+                            <UserAdd size={16} />
+                            Data Users
                         </Link>
 
                         <Link href={'/integrations'} className={`flex ${pathname === '/integrations' ? 'text-primary' : ''} hover:px-8 duration-200 px-6 py-1 items-center gap-2`}>

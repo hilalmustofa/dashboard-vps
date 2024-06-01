@@ -52,7 +52,7 @@ function ChartKemakmuran() {
     if (session) {
         fetchData();
       }
-  }, [session]);
+  }, [router,session]);
 
   useEffect(() => {
     if (Object.keys(data.data).length > 0) {

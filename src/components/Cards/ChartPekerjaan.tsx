@@ -79,7 +79,7 @@ function ChartEmploymentStatus() {
     if(session) {
     fetchData();
     }
-  }, [session]);
+  }, [chartData.labels, session]);
 
   if (loading) {
     return <Loading loading={loading} color="#7B6CF0" />;

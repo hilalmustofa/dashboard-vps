@@ -1,30 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken'
-
-const prisma = new PrismaClient();
-
+import { authenticateToken } from '../auth';
+import prisma from '../prisma';
 
 async function calculateWealthDistribution(req: NextApiRequest, res: NextApiResponse) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const token = authHeader.substring('Bearer '.length);
-    try {
-        const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET ?? '5d24a52636368d64fa877143e58e4b68770b44a1697a1d0d783eff936f5116a4');
-        const userId = (decodedToken as { id: number }).id;
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-        });
-
-        if (!user) {
-            return res.status(401).json({ message: 'Unauthorized' });
-        }
-
-    } catch (error) {
-        return res.status(401).json({ message: 'Invalid token' });
+    const userId = await authenticateToken(req, res);
+    if (!userId) {
+        return;
     }
     try {
         const kkList = await prisma.kK.findMany({

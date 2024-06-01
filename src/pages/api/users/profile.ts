@@ -1,8 +1,6 @@
-// pages/api/profile.tsx
-
 import { NextApiRequest, NextApiResponse } from 'next';
-import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { authenticateToken } from '../auth';
+import prisma from '../prisma';
 
 interface User {
   id: number;
@@ -11,8 +9,6 @@ interface User {
   role: string;
   avatar: string;
 }
-
-const prisma = new PrismaClient();
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -23,29 +19,14 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 }
 
 async function getUserProfile(req: NextApiRequest, res: NextApiResponse) {
-  const authorizationHeader = req.headers['authorization'];
-
-  if (!authorizationHeader) {
-    return res.status(401).json({
-      code: 401,
-      message: 'Authorization header is missing',
-    });
-  }
-
-  const token = authorizationHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({
-      code: 401,
-      message: 'Invalid token format',
-    });
-  }
+  const userId = await authenticateToken(req, res);
+    if (!userId) {
+        return;
+    }
 
   try {
-    const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET || '');
-
     const user: User | null = await prisma.user.findUnique({
-      where: { id: (decodedToken as any).id },
+      where: { id: userId },
       select: {
         id: true,
         username: true,
@@ -67,7 +48,7 @@ async function getUserProfile(req: NextApiRequest, res: NextApiResponse) {
     } else {
       return res.status(404).json({
         code: 404,
-        message: 'User not found',
+        message: 'User tidak ditemukan',
       });
     }
   } catch (error) {

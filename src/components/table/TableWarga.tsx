@@ -16,6 +16,7 @@ interface WargaData {
   tempat_lahir: string;
   tanggal_lahir: string;
   jenis_kelamin: string;
+  pekerjaan: string;
   alamat: string;
   rt: string;
   rw: string;
@@ -190,6 +191,7 @@ function TableWarga() {
               <th className="p-2">Tempat Lahir</th>
               <th className="p-2">Tanggal Lahir</th>
               <th className="p-2">Jenis Kelamin</th>
+              <th className="p-2">Pekerjaan</th>
               <th className="p-2">Alamat</th>
               <th className="p-2">RT</th>
               <th className="p-2">RW</th>
@@ -225,6 +227,11 @@ function TableWarga() {
                 <td className="p-2">
                   <div className="flex items-center">
                     <p className="text-[12px]">{rowData.jenis_kelamin}</p>
+                  </div>
+                </td>
+                <td className="p-2">
+                  <div className="flex items-center">
+                    <p className="text-[12px]">{rowData.pekerjaan}</p>
                   </div>
                 </td>
                 <td className="p-2">
