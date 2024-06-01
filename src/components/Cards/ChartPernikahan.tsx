@@ -116,7 +116,7 @@ function ChartMarriageStatus() {
     if(session){
     fetchData();
     }
-  }, [chartData.labels, session]);
+  }, [session]);
 
   if (loading) {
     return <Loading loading={loading} color="#7B6CF0" />; 
